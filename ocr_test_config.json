@@ -14,6 +14,23 @@
     "加注": [480, 350, 531, 380],
     "自己的筹码": [240, 357, 305, 371]
   },
+  "recognition_strategies": {
+    "pure_chinese": {
+      "regions": ["发牌", "弃牌"],
+      "config": "--oem 3 --psm 6 --dpi 300 -l chi_sim",
+      "description": "纯中文识别"
+    },
+    "number_english": {
+      "regions": ["底池", "自己的筹码", "公共牌1", "公共牌2", "公共牌3", "公共牌4", "公共牌5", "自己的手牌1", "自己的手牌2"],
+      "config": "--oem 3 --psm 6 --dpi 300 -l eng -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+      "description": "数字英文混合识别"
+    },
+    "chinese_english_number": {
+      "regions": ["跟注", "加注"],
+      "config": "--oem 3 --psm 6 --dpi 300 -l chi_sim+eng",
+      "description": "中文英文数字混合识别"
+    }
+  },
   "psm_modes": [6, 8, 7, 13],
   "char_whitelist": "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz一二三四五六七八九十百千万亿跟注加注弃牌发牌底池公共牌自己的筹码BB大小王红桃黑桃方块梅花AKQJ",
   "language": "chi_sim+eng",
