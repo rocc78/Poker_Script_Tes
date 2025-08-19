@@ -59,7 +59,7 @@ class SuitRecognizer:
         print("正在加载花色模板...")
         
         # 尝试加载新调整大小的模板
-        new_template_dir = Path("1/new_templates")
+        new_template_dir = Path("1/new_templates/public")
         if new_template_dir.exists():
             template_files = {
                 'club': 'club_gray.png',
@@ -72,11 +72,9 @@ class SuitRecognizer:
                 template_path = new_template_dir / filename
                 if template_path.exists():
                     # 读取模板图片
-                    template = cv2.imread(str(template_path), cv2.IMREAD_COLOR)
+                    template = cv2.imread(str(template_path), cv2.IMREAD_GRAYSCALE)
                     if template is not None:
-                        # 转换为灰度图
-                        template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
-                        self.templates[suit_name] = template_gray
+                        self.templates[suit_name] = template
                         print(f"✅ 加载新模板: {filename} -> {self.suit_names[suit_name]}")
                     else:
                         print(f"❌ 无法读取新模板: {filename}")
@@ -88,21 +86,19 @@ class SuitRecognizer:
         # 如果没有加载到新模板，则使用原始模板
         if not self.templates:
             template_files = {
-                'club': 'club_gray.png',
-                'diamond': 'diamond_gray.png', 
-                'heart': 'heart_gray.png',
-                'spade': 'spade_gray.png'
+                'club': 'club.png',
+                'diamond': 'diamond.png', 
+                'heart': 'heart.png',
+                'spade': 'spade.png'
             }
             
             for suit_name, filename in template_files.items():
                 template_path = self.template_dir / filename
                 if template_path.exists():
                     # 读取模板图片
-                    template = cv2.imread(str(template_path), cv2.IMREAD_COLOR)
+                    template = cv2.imread(str(template_path), cv2.IMREAD_GRAYSCALE)
                     if template is not None:
-                        # 转换为灰度图
-                        template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
-                        self.templates[suit_name] = template_gray
+                        self.templates[suit_name] = template
                         print(f"✅ 加载模板: {filename} -> {self.suit_names[suit_name]}")
                     else:
                         print(f"❌ 无法读取模板: {filename}")
