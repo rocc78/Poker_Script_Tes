@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 from pathlib import Path
 from typing import Dict, Tuple, List, Union
+import json
 
 
 class BtnRecognizer:
@@ -23,6 +24,7 @@ class BtnRecognizer:
         """
         self.template_path = Path(template_path)
         self.template = None
+        self.btn_config = self.load_btn_config()
         self.load_template()
         
     def load_template(self):
@@ -40,6 +42,96 @@ class BtnRecognizer:
                 print(f"❌ 无法读取模板: {self.template_path}")
         else:
             print(f"❌ 模板文件不存在: {self.template_path}")
+    
+    def load_btn_config(self, config_path="btn.json"):
+        """
+        加载btn配置文件
+        
+        Args:
+            config_path: 配置文件路径
+            
+        Returns:
+            配置字典
+        """
+        config_path = Path(config_path)
+        if not config_path.exists():
+            print(f"⚠️  btn配置文件不存在: {config_path}")
+            return None
+        
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"❌ 加载btn配置文件失败: {e}")
+            return None
+    
+    def calculate_adaptive_regions(self, image_width, image_height):
+        """
+        根据图像尺寸计算自适应区域
+        
+        Args:
+            image_width: 图像宽度
+            image_height: 图像高度
+            
+        Returns:
+            自适应区域字典
+        """
+        if self.btn_config is None or 'adaptive_regions' not in self.btn_config or 'reference_size' not in self.btn_config:
+            return None
+        
+        reference_width, reference_height = self.btn_config['reference_size']
+        adaptive_regions = self.btn_config['adaptive_regions']
+        
+        # 计算比例
+        width_ratio = image_width / reference_width
+        height_ratio = image_height / reference_height
+        
+        # 计算自适应区域
+        absolute_regions = {}
+        for name, ratios in adaptive_regions.items():
+            x1_ratio, y1_ratio, x2_ratio, y2_ratio = ratios
+            x1 = int(x1_ratio * image_width)
+            y1 = int(y1_ratio * image_height)
+            x2 = int(x2_ratio * image_width)
+            y2 = int(y2_ratio * image_height)
+            absolute_regions[name] = [x1, y1, x2, y2]
+        
+        return absolute_regions
+    
+    def determine_table_position(self, detected_x, detected_y, image_width, image_height, confidence_threshold=0.8):
+        """
+        根据识别位置确定牌桌位置
+        
+        Args:
+            detected_x: 检测到的btn位置x坐标
+            detected_y: 检测到的btn位置y坐标
+            image_width: 图像宽度
+            image_height: 图像高度
+            confidence_threshold: 置信度阈值
+            
+        Returns:
+            位置名称和置信度信息
+        """
+        # 计算自适应区域
+        adaptive_regions = self.calculate_adaptive_regions(image_width, image_height)
+        if adaptive_regions is None:
+            return "未知位置", 0.0
+        
+        # 检查检测位置在哪个区域内
+        for position_name, region_coords in adaptive_regions.items():
+            x1, y1, x2, y2 = region_coords
+            if x1 <= detected_x <= x2 and y1 <= detected_y <= y2:
+                # 计算置信度（基于位置在区域中心的接近程度）
+                center_x = (x1 + x2) // 2
+                center_y = (y1 + y2) // 2
+                max_distance = ((x2-x1)//2)**2 + ((y2-y1)//2)**2
+                actual_distance = (detected_x-center_x)**2 + (detected_y-center_y)**2
+                confidence = max(0, 1 - (actual_distance / max_distance))
+                
+                if confidence >= confidence_threshold:
+                    return position_name, confidence
+        
+        return "未知位置", 0.0
     
     def match_template(self, image: np.ndarray, template: np.ndarray, 
                       threshold: float = 0.6) -> Dict:
@@ -259,9 +351,17 @@ class BtnRecognizer:
             pos_label = f"Pos: ({x}, {y})"
             cv2.putText(vis_image, pos_label, (10, 30), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            
+            # 显示牌桌位置信息
+            if self.btn_config is not None:
+                table_position, confidence = self.determine_table_position(x, y, image.shape[1], image.shape[0])
+                table_label = f"Table Pos: {table_position} ({confidence:.2f})"
+                cv2.putText(vis_image, table_label, (10, 60), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
         else:
             # 显示未匹配到的信息
-            cv2.putText(vis_image, f"No btn detected (max score: {result['score']:.3f})", (10, 30), 
+            max_score = result.get('max_score', result.get('score', 0))
+            cv2.putText(vis_image, f"No btn detected (max score: {max_score:.3f})", (10, 30), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
         
         # 保存结果

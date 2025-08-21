@@ -20,16 +20,16 @@ from datetime import datetime
 warnings.filterwarnings("ignore")
 
 class TesseractOCRTest:
-    def __init__(self):
+    def __init__(self, config_file='digit_recognition_config.json'):
         print("=== Tesseract OCR识别测试 ===")
         self.setup_output_dir()
         self.setup_tesseract()
-        self.load_config()
+        self.load_config(config_file)
     
     def setup_output_dir(self):
         """设置输出目录"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.output_dir = f"ocr_results_{timestamp}"
+        self.output_dir = f"result/ocr_results_{timestamp}"
         os.makedirs(self.output_dir, exist_ok=True)
         print(f"📁 输出目录: {self.output_dir}")
         
@@ -83,20 +83,23 @@ class TesseractOCRTest:
             self.language = 'eng'
             self.chinese_chars = ''
     
-    def load_config(self):
+    def load_config(self, config_file='digit_recognition_config.json'):
         """加载配置文件"""
         try:
-            if os.path.exists('ocr_test_config.json'):
-                with open('ocr_test_config.json', 'r', encoding='utf-8') as f:
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
                     config = json.load(f)
                 
                 self.test_regions = config.get('test_regions', {})
+                self.adaptive_regions = config.get('adaptive_regions', {})
+                self.reference_size = config.get('reference_size', [677, 491])
                 self.psm_modes = config.get('psm_modes', [6, 8, 7, 13])
                 self.char_whitelist = config.get('char_whitelist', '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz一二三四五六七八九十百千万亿跟注加注弃牌发牌底池公共牌自己的筹码BB大小王红桃黑桃方块梅花AKQJ')
                 self.recognition_strategies = config.get('recognition_strategies', {})
                 
                 print("✅ 已加载配置文件")
                 print(f"   识别策略: {len(self.recognition_strategies)} 种")
+                print(f"   自适应区域: {len(self.adaptive_regions)} 个")
             else:
                 # 默认配置
                 self.test_regions = {
@@ -106,6 +109,8 @@ class TesseractOCRTest:
                     '右下角': [400, 300, 600, 400],
                     '中心区域': [200, 150, 400, 250]
                 }
+                self.adaptive_regions = {}
+                self.reference_size = [677, 491]
                 self.psm_modes = [6, 8, 7, 13]
                 self.char_whitelist = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz一二三四五六七八九十百千万亿跟注加注弃牌发牌底池公共牌自己的筹码BB大小王红桃黑桃方块梅花AKQJ'
                 self.recognition_strategies = {}
@@ -121,6 +126,8 @@ class TesseractOCRTest:
                 '右下角': [400, 300, 600, 400],
                 '中心区域': [200, 150, 400, 250]
             }
+            self.adaptive_regions = {}
+            self.reference_size = [677, 491]
             self.psm_modes = [6, 8, 7, 13]
             self.char_whitelist = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz一二三四五六七八九十百千万亿跟注加注弃牌发牌底池公共牌自己的筹码BB大小王红桃黑桃方块梅花AKQJ'
             self.recognition_strategies = {}
@@ -144,12 +151,62 @@ class TesseractOCRTest:
             print(f"❌ 加载图片失败：{str(e)}")
             return None
     
-    def preprocess_image_for_chinese(self, image):
+    def calculate_adaptive_regions(self, image_width, image_height):
+        """
+        根据图片尺寸计算自适应区域坐标
+        
+        Args:
+            image_width: 图片宽度
+            image_height: 图片高度
+            
+        Returns:
+            绝对坐标区域 {区域名: [x1, y1, x2, y2]}
+        """
+        if not self.adaptive_regions or not self.reference_size:
+            return {}
+        
+        ref_width, ref_height = self.reference_size
+        absolute_regions = {}
+        
+        for region_name, ratios in self.adaptive_regions.items():
+            if len(ratios) != 4:
+                print(f"⚠️  区域 {region_name} 的坐标比例值数量不正确: {len(ratios)}")
+                continue
+            
+            # 解析比例值
+            x1_ratio, y1_ratio, x2_ratio, y2_ratio = ratios
+            
+            # 计算实际坐标
+            x1 = int(x1_ratio * image_width)
+            y1 = int(y1_ratio * image_height)
+            x2 = int(x2_ratio * image_width)
+            y2 = int(y2_ratio * image_height)
+            
+            # 确保坐标在有效范围内
+            x1 = max(0, min(x1, image_width))
+            y1 = max(0, min(y1, image_height))
+            x2 = max(0, min(x2, image_width))
+            y2 = max(0, min(y2, image_height))
+            
+            # 确保左上角坐标小于右下角坐标
+            if x1 > x2:
+                x1, x2 = x2, x1
+            if y1 > y2:
+                y1, y2 = y2, y1
+            
+            absolute_regions[region_name] = [x1, y1, x2, y2]
+        
+        return absolute_regions
+    
+    def preprocess_image_for_chinese(self, image, enable_grayscale=True):
         """为中文识别预处理图片"""
         try:
-            # 转换为灰度图
-            if image.mode != 'L':
-                gray_image = image.convert('L')
+            # 转换为灰度图（可选）
+            if enable_grayscale:
+                if image.mode != 'L':
+                    gray_image = image.convert('L')
+                else:
+                    gray_image = image
             else:
                 gray_image = image
             
@@ -176,17 +233,28 @@ class TesseractOCRTest:
         """获取区域的识别策略"""
         if not self.recognition_strategies:
             # 如果没有配置策略，使用默认配置
+            print(f"   ⚠️  未配置识别策略，使用默认配置")
             return "--oem 3 --psm 6 --dpi 300 -l chi_sim+eng"
         
+        print(f"   🔍 查找区域 {region_name} 的识别策略")
+        print(f"   📚 可用策略: {list(self.recognition_strategies.keys())}")
+        
+        # 查找区域对应的策略，优先匹配区域数量较少的策略（更具体）
+        sorted_strategies = sorted(self.recognition_strategies.items(), key=lambda x: len(x[1].get('regions', [])))
+        
         # 查找区域对应的策略
-        for strategy_name, strategy in self.recognition_strategies.items():
-            if region_name in strategy.get('regions', []):
+        for strategy_name, strategy in sorted_strategies:
+            regions = strategy.get('regions', [])
+            print(f"   📋 策略 {strategy_name} 包含区域: {regions}")
+            if region_name in regions:
                 config = strategy.get('config', '')
                 description = strategy.get('description', '')
-                print(f"   📋 使用策略: {description} ({strategy_name})")
+                print(f"   ✅ 找到匹配策略: {description} ({strategy_name})")
+                print(f"   🛠️  使用配置: {config}")
                 return config
         
         # 如果没有找到对应策略，使用默认配置
+        print(f"   ⚠️  未找到区域 {region_name} 的识别策略，使用默认配置")
         return "--oem 3 --psm 6 --dpi 300 -l chi_sim+eng"
     
     def recognize_full_image(self, image, save_result=True):
@@ -197,9 +265,12 @@ class TesseractOCRTest:
         
         print(f"\n🔍 开始识别整个图片...")
         
+        # 检查是否为数字识别配置
+        is_digit_only = 'digit' in self.char_whitelist and not any(c in self.char_whitelist for c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz一二三四五六七八九十百千万亿跟注加注弃牌发牌底池公共牌自己的筹码BB大小王红桃黑桃方块梅花AKQJ')
+        
         try:
-            # 预处理图片以提高中文识别效果
-            processed_image = self.preprocess_image_for_chinese(image)
+            # 预处理图片以提高中文识别效果（根据配置决定是否启用灰度处理）
+            processed_image = self.preprocess_image_for_chinese(image, enable_grayscale=not is_digit_only)
             
             # 构建配置字符串 - 使用最佳中文识别配置
             config = f"--oem 3 --psm 6 --dpi 300 -l chi_sim"
@@ -252,9 +323,12 @@ class TesseractOCRTest:
         
         print(f"\n🔍 开始中文文本识别...")
         
+        # 检查是否为数字识别配置
+        is_digit_only = 'digit' in self.char_whitelist and not any(c in self.char_whitelist for c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz一二三四五六七八九十百千万亿跟注加注弃牌发牌底池公共牌自己的筹码BB大小王红桃黑桃方块梅花AKQJ')
+        
         try:
-            # 预处理图片以提高中文识别效果
-            processed_image = self.preprocess_image_for_chinese(image)
+            # 预处理图片以提高中文识别效果（根据配置决定是否启用灰度处理）
+            processed_image = self.preprocess_image_for_chinese(image, enable_grayscale=not is_digit_only)
             
             # 中文识别专用配置 - 根据测试结果优化
             chinese_configs = [
@@ -301,20 +375,21 @@ class TesseractOCRTest:
                         }
                         
                 except Exception as e:
-                    print(f"   ❌ 配置 {i+1} 失败: {str(e)}")
+                    print(f"   ❌ 配置 {i+1} 识别失败: {str(e)}")
                     continue
             
-            print(f"✅ 中文识别完成，最佳结果: '{best_result['text']}' (中文比例: {best_result['confidence']:.2f})")
-            
-            # 保存结果
-            if save_result:
-                self.save_recognition_result(best_result, "chinese_text")
-            
-            return best_result
-            
+            # 显示最佳结果
+            if best_result['success']:
+                print(f"\n🏆 最佳识别结果 (配置: PSM {best_result['config'].split('--psm ')[1].split()[0]}):")
+                print(f"   识别结果: '{best_result['text']}'")
+                print(f"   中文比例: {best_result['confidence']:.2f}")
+                print(f"   识别时间: {best_result['time']:.3f}秒")
+            else:
+                print(f"\n❌ 未能识别到有效文字")
+                
         except Exception as e:
-            print(f"❌ 中文识别失败: {str(e)}")
-            return {
+            print(f"❌ 中文文本识别失败: {str(e)}")
+            best_result = {
                 'text': '',
                 'confidence': 0,
                 'config': '',
@@ -322,8 +397,14 @@ class TesseractOCRTest:
                 'success': False,
                 'error': str(e)
             }
+        
+        # 保存结果
+        if save_result:
+            self.save_recognition_result(best_result, "chinese_text")
+        
+        return best_result
     
-    def recognize_regions(self, image, regions=None, save_result=True):
+    def recognize_regions(self, image, regions=None):
         """识别指定区域"""
         if not self.default_config:
             print("❌ Tesseract OCR未初始化")
@@ -332,126 +413,126 @@ class TesseractOCRTest:
         if regions is None:
             regions = self.test_regions
         
-        print(f"\n🔍 开始识别指定区域...")
+        if not regions:
+            print("❌ 未配置识别区域")
+            return None
         
-        all_results = {}
-        
+        # 如果regions中的坐标是相对坐标（0-1之间），需要转换为绝对坐标
+        converted_regions = {}
+        image_width, image_height = image.size
         for region_name, coords in regions.items():
-            print(f"\n📍 识别区域: {region_name} {coords}")
-            
+            # 检查坐标是否为相对坐标（0-1之间）
+            if all(0 <= coord <= 1 for coord in coords):
+                # 转换为绝对坐标
+                x1_ratio, y1_ratio, x2_ratio, y2_ratio = coords
+                x1 = int(x1_ratio * image_width)
+                y1 = int(y1_ratio * image_height)
+                x2 = int(x2_ratio * image_width)
+                y2 = int(y2_ratio * image_height)
+                
+                # 确保坐标在有效范围内
+                x1 = max(0, min(x1, image_width))
+                y1 = max(0, min(y1, image_height))
+                x2 = max(0, min(x2, image_width))
+                y2 = max(0, min(y2, image_height))
+                
+                # 确保左上角坐标小于右下角坐标
+                if x1 > x2:
+                    x1, x2 = x2, x1
+                if y1 > y2:
+                    y1, y2 = y2, y1
+                
+                converted_regions[region_name] = [x1, y1, x2, y2]
+                print(f"📍 区域 {region_name} 坐标已转换: {coords} -> [{x1}, {y1}, {x2}, {y2}]")
+            else:
+                # 假设已经是绝对坐标
+                converted_regions[region_name] = coords
+                print(f"📍 区域 {region_name} 使用绝对坐标: {coords}")
+        
+        print(f"\n🔍 开始识别指定区域...")
+        print(f"   共 {len(converted_regions)} 个区域")
+        
+        results = {}
+        
+        # 为每个区域识别文字
+        for i, (region_name, coords) in enumerate(converted_regions.items()):
             try:
-                # 裁剪区域
+                print(f"\n📍 区域 {i+1}/{len(converted_regions)}: {region_name} {coords}")
+                
+                # 裁剪区域图片
                 x1, y1, x2, y2 = coords
                 cropped_image = image.crop((x1, y1, x2, y2))
                 
-                print(f"   裁剪区域大小: {cropped_image.size}")
+                # 保存裁剪图片（可选）
+                # cropped_filename = os.path.join(self.output_dir, f"cropped_{region_name}.png")
+                # cropped_image.save(cropped_filename)
+                # print(f"   📁 裁剪图片已保存: {cropped_filename}")
                 
-                # 保存裁剪的图片
-                cropped_filename = os.path.join(self.output_dir, f"cropped_{region_name}.png")
-                cropped_image.save(cropped_filename)
-                print(f"   已保存裁剪图片: {cropped_filename}")
+                # 获取该区域的识别策略
+                print(f"   📌 区域名称: '{region_name}'")
+                config = self.get_recognition_strategy(region_name)
+                print(f"   📥 获取到的配置: {config}")
                 
-                # 识别该区域 - 使用区域特定的识别策略
-                try:
-                    # 预处理裁剪区域
-                    processed_cropped = self.preprocess_image_for_chinese(cropped_image)
-                    
-                    # 获取区域特定的识别策略
-                    config = self.get_recognition_strategy(region_name)
-                    
-                    # 记录开始时间
-                    start_time = time.time()
-                    
-                    # 识别文字
-                    text = pytesseract.image_to_string(processed_cropped, config=config)
-                    
-                    # 记录结束时间
-                    end_time = time.time()
-                    recognition_time = end_time - start_time
-                    
-                    # 清理文本
-                    cleaned_text = re.sub(r'\s+', ' ', text.strip())
-                    
-                    region_results = {
-                        'text': cleaned_text,
-                        'time': recognition_time,
-                        'success': bool(cleaned_text)
-                    }
-                    
-                    print(f"   ✅ PSM 6: '{cleaned_text}' ({recognition_time:.3f}秒)")
-                    
-                except Exception as e:
-                    print(f"   ❌ PSM 6 失败: {str(e)}")
-                    region_results = {
-                        'text': '',
-                        'time': 0,
-                        'success': False,
-                        'error': str(e)
-                    }
+                # 检查是否为数字识别配置
+                is_digit_only = 'digit' in self.char_whitelist and not any(c in self.char_whitelist for c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz一二三四五六七八九十百千万亿跟注加注弃牌发牌底池公共牌自己的筹码BB大小王红桃黑桃方块梅花AKQJ')
                 
-                all_results[region_name] = region_results
+                # 预处理图片
+                processed_image = self.preprocess_image_for_chinese(cropped_image, enable_grayscale=not is_digit_only)
                 
+                # 识别文字
+                print(f"   🧪 识别配置: {config}")
+                print(f"   🌐 语言设置: {self.language}")
+                print(f"   🧪 调用前配置: {config}")
+                text = pytesseract.image_to_string(processed_image, config=config, lang=self.language)
+                print(f"   🧪 调用后配置: {config}")
+                
+                # 清理文本
+                cleaned_text = re.sub(r'\s+', ' ', text.strip())
+                
+                # 保存结果
+                region_results = {
+                    'text': cleaned_text,
+                    'coords': coords,
+                    'success': bool(cleaned_text)
+                }
+                
+                results[region_name] = region_results
+                
+                if cleaned_text:
+                    print(f"   ✅ 识别结果: '{cleaned_text}'")
+                else:
+                    print(f"   ⚠️  未识别到文字")
+                    
             except Exception as e:
-                print(f"❌ 处理区域 {region_name} 失败: {str(e)}")
-                all_results[region_name] = {'error': str(e)}
+                print(f"   ❌ 区域识别失败: {str(e)}")
+                results[region_name] = {
+                    'text': '',
+                    'coords': coords,
+                    'success': False,
+                    'error': str(e)
+                }
         
-        # 保存结果
-        if save_result:
-            self.save_recognition_result(all_results, "regions")
-        
-        return all_results
+        return results
     
-    def save_recognition_result(self, results, result_type):
-        """保存识别结果"""
+    def save_recognition_result(self, results, result_type="unknown"):
+        """保存识别结果到文件"""
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = os.path.join(self.output_dir, f"ocr_result_{result_type}_{timestamp}.json")
+            result_file = os.path.join(self.output_dir, f"{result_type}_result_{timestamp}.json")
             
-            # 准备保存的数据
-            save_data = {
-                'timestamp': datetime.now().isoformat(),
-                'result_type': result_type,
-                'results': results
-            }
+            # 保存结果
+            with open(result_file, 'w', encoding='utf-8') as f:
+                json.dump(results, f, ensure_ascii=False, indent=2)
             
-            # 保存JSON文件
-            with open(filename, 'w', encoding='utf-8') as f:
-                json.dump(save_data, f, ensure_ascii=False, indent=2)
-            
-            print(f"📄 识别结果已保存: {filename}")
-            
-            # 同时保存文本格式
-            txt_filename = os.path.join(self.output_dir, f"ocr_result_{result_type}_{timestamp}.txt")
-            with open(txt_filename, 'w', encoding='utf-8') as f:
-                f.write(f"Tesseract OCR识别结果\n")
-                f.write(f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write(f"类型: {result_type}\n")
-                f.write("="*50 + "\n\n")
-                
-                if result_type == "full_image":
-                    f.write(f"PSM 6:\n")
-                    f.write(f"  文本: {results.get('text', '')}\n")
-                    f.write(f"  时间: {results.get('time', 0):.3f}秒\n")
-                    f.write(f"  成功: {results.get('success', False)}\n\n")
-                else:
-                    for region_name, region_results in results.items():
-                        f.write(f"区域: {region_name}\n")
-                        f.write("-"*30 + "\n")
-                        if isinstance(region_results, dict):
-                            f.write(f"  PSM 6:\n")
-                            f.write(f"    文本: {region_results.get('text', '')}\n")
-                            f.write(f"    时间: {region_results.get('time', 0):.3f}秒\n")
-                            f.write(f"    成功: {region_results.get('success', False)}\n\n")
-            
-            print(f"📄 文本结果已保存: {txt_filename}")
+            print(f"   📁 结果已保存: {result_file}")
             
         except Exception as e:
-            print(f"❌ 保存结果失败: {str(e)}")
+            print(f"   ❌ 保存结果失败: {str(e)}")
     
     def create_marked_image(self, image, regions=None, results=None):
-        """创建带标记的图片"""
+        """创建标记了识别区域和结果的图片"""
         try:
-            # 创建副本
+            # 创建标记图片
             marked_image = image.copy()
             draw = ImageDraw.Draw(marked_image)
             
@@ -535,15 +616,15 @@ class TesseractOCRTest:
             print(f"❌ 创建标记图片失败: {str(e)}")
             return None
 
-def main():
+def main(config_file='digit_recognition_config.json'):
     """主函数"""
     print("="*60)
-    print("🤖 Tesseract OCR识别测试程序")
+    print("Tesseract OCR识别测试程序")
     print("支持识别整个图片和指定区域")
     print("="*60)
     
     # 创建OCR测试器
-    ocr_test = TesseractOCRTest()
+    ocr_test = TesseractOCRTest(config_file)
     
     try:
         # 获取图片路径
@@ -572,13 +653,14 @@ def main():
         print("3. 两种都识别")
         print("4. 专门中文识别")
         print("5. 所有模式都识别")
+        print("6. 识别自适应区域")
         
         while True:
-            choice = input("\n请选择 (1/2/3/4/5): ").strip()
-            if choice in ['1', '2', '3', '4', '5']:
+            choice = input("\n请选择 (1/2/3/4/5/6): ").strip()
+            if choice in ['1', '2', '3', '4', '5', '6']:
                 break
             else:
-                print("❌ 请输入 1、2、3、4 或 5")
+                print("❌ 请输入 1、2、3、4、5 或 6")
         
         # 执行识别
         if choice in ['1', '3', '5']:
@@ -617,6 +699,28 @@ def main():
             print(f"\n🎨 创建标记图片...")
             ocr_test.create_marked_image(image, ocr_test.test_regions, region_results)
         
+        if choice == '6':
+            print(f"\n{'='*40}")
+            print("识别自适应区域")
+            print(f"{'='*40}")
+            
+            # 计算自适应区域
+            adaptive_regions = ocr_test.calculate_adaptive_regions(image.width, image.height)
+            
+            if not adaptive_regions:
+                print("❌ 未配置自适应区域或配置有误")
+            else:
+                print(f"\n📋 计算出的自适应区域 (基于图片大小 {image.width}x{image.height}): ")
+                for i, (name, coords) in enumerate(adaptive_regions.items()):
+                    print(f"  {i+1}. {name}: {coords}")
+                
+                # 使用自适应区域进行识别
+                region_results = ocr_test.recognize_regions(image, adaptive_regions)
+                
+                # 创建标记图片
+                print(f"\n🎨 创建标记图片...")
+                ocr_test.create_marked_image(image, adaptive_regions, region_results)
+        
         print(f"\n✅ 识别完成！")
         print(f"📁 所有结果已保存到目录: {ocr_test.output_dir}")
         print(f"📁 请查看该目录中的文件")
@@ -627,4 +731,9 @@ def main():
         print(f"\n👋 程序已退出")
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if len(sys.argv) > 1:
+        config_file = sys.argv[1]
+        main(config_file)
+    else:
+        main()
