@@ -41,6 +41,7 @@ class PokerRecognizer:
         }
         self.load_suit_templates()
         self.load_btn_template()
+        self.load_back_template()
     
     def setup_output_dir(self):
         """设置输出目录"""
@@ -238,6 +239,24 @@ class PokerRecognizer:
             template = cv2.imread(str(template_path), cv2.IMREAD_GRAYSCALE)
             if template is not None:
                 self.btn_template = template
+                print(f"✅ 加载模板成功: {template_path.name}")
+                print(f"  模板尺寸: {template.shape[1]}x{template.shape[0]}")
+            else:
+                print(f"❌ 无法读取模板: {template_path}")
+        else:
+            print(f"❌ 模板文件不存在: {template_path}")
+    
+    def load_back_template(self, template_path: str = "1/new_templates/back.png"):
+        """加载扑克背面模板图片"""
+        print(f"正在加载扑克背面模板: {template_path}")
+        self.back_template = None
+        
+        template_path = Path(template_path)
+        if template_path.exists():
+            # 读取模板图片
+            template = cv2.imread(str(template_path), cv2.IMREAD_GRAYSCALE)
+            if template is not None:
+                self.back_template = template
                 print(f"✅ 加载模板成功: {template_path.name}")
                 print(f"  模板尺寸: {template.shape[1]}x{template.shape[0]}")
             else:
@@ -1227,6 +1246,130 @@ class PokerRecognizer:
             
         return vis_image
     
+    # 扑克背面识别相关方法
+    def check_player_fold_by_variance(self, image: np.ndarray, variance_threshold: float = 10.0) -> Dict:
+        """
+        基于颜色方差检查玩家是否弃牌（替代方法）
+        
+        Args:
+            image: 输入图像
+            variance_threshold: 颜色方差阈值，低于此值认为是均色区域（未弃牌）
+            
+        Returns:
+            玩家弃牌状态字典
+        """
+        # 计算自适应区域
+        image_height, image_width = image.shape[:2]
+        adaptive_regions = self.calculate_btn_adaptive_regions(image_width, image_height)
+        
+        if adaptive_regions is None:
+            return {'error': '无法计算自适应区域'}
+        
+        # 检查每个玩家区域
+        player_status = {}
+        for i in range(1, 6):
+            player_key = f"玩家{i}扑克背面"
+            if player_key in adaptive_regions:
+                x1, y1, x2, y2 = adaptive_regions[player_key]
+                # 提取区域图像
+                region_image = image[y1:y2, x1:x2]
+                
+                if region_image.size > 0:
+                    # 转换为灰度图
+                    if len(region_image.shape) == 3:
+                        gray = cv2.cvtColor(region_image, cv2.COLOR_BGR2GRAY)
+                    else:
+                        gray = region_image.copy()
+                    
+                    # 计算颜色方差
+                    variance = np.var(gray)
+                    
+                    # 如果方差小于阈值，判断为未弃牌
+                    is_folded = variance < variance_threshold
+                    
+                    player_status[f"玩家{i}"] = {
+                        'folded': is_folded,
+                        'variance': variance,
+                        'confidence': variance / 100.0 if variance / 100.0 < 1.0 else 1.0
+                    }
+                else:
+                    player_status[f"玩家{i}"] = {
+                        'folded': True,
+                        'variance': 0.0,
+                        'confidence': 0.0,
+                        'error': '区域图像为空'
+                    }
+            else:
+                player_status[f"玩家{i}"] = {
+                    'folded': True,
+                    'variance': 0.0,
+                    'confidence': 0.0,
+                    'error': '未找到区域定义'
+                }
+        
+        return player_status
+    
+    def visualize_fold_result(self, image: np.ndarray, fold_status: Dict, save_path: str = None) -> np.ndarray:
+        """
+        可视化玩家弃牌状态结果
+        
+        Args:
+            image: 原始图像
+            fold_status: 玩家弃牌状态字典
+            save_path: 保存路径
+            
+        Returns:
+            标注后的图像
+        """
+        # 复制图像用于绘制
+        vis_image = image.copy()
+        
+        # 使用PIL处理中文文本显示
+        vis_pil = Image.fromarray(cv2.cvtColor(vis_image, cv2.COLOR_BGR2RGB))
+        draw = ImageDraw.Draw(vis_pil)
+        
+        # 设置字体
+        try:
+            # 尝试使用系统中文字体
+            font = ImageFont.truetype("simhei.ttf", 20, encoding="utf-8")
+        except:
+            # 如果找不到中文字体，使用默认字体
+            font = ImageFont.load_default()
+        
+        # 显示每个玩家的状态
+        y_offset = 40
+        if 'error' in fold_status:
+            draw.text((10, y_offset), f"Error: {fold_status['error']}", (255, 0, 0), font=font)
+        else:
+            for player, status in fold_status.items():
+                # 跳过错误信息
+                if 'error' in status:
+                    continue
+                
+                # 根据弃牌状态设置颜色
+                color = (0, 255, 0) if status['folded'] else (255, 0, 0)  # 绿色表示已弃牌，红色表示未弃牌
+                
+                # 显示玩家状态
+                if 'variance' in status:
+                    # 颜色方差方法
+                    label = f"{player}: {'未弃牌' if status['folded'] else '已弃牌'} (方差: {status['variance']:.2f})"
+                else:
+                    # 模板匹配方法
+                    label = f"{player}: {'未弃牌' if status['folded'] else '已弃牌'} (置信度: {status['confidence']:.3f})"
+                
+                draw.text((10, y_offset), label, color, font=font)
+                y_offset += 25
+        
+        # 转换回OpenCV格式
+        vis_image = cv2.cvtColor(np.array(vis_pil), cv2.COLOR_RGB2BGR)
+        
+        # 保存结果
+        if save_path:
+            cv2.imwrite(save_path, vis_image)
+            print(f"弃牌检测结果图像已保存: {save_path}")
+            
+        return vis_image
+    
     # 主要功能接口
     def recognize_all(self, image_path: str):
         """
@@ -1302,6 +1445,29 @@ class PokerRecognizer:
         # 可视化按钮识别结果
         vis_btn_image = self.visualize_btn_result(image_cv, btn_result, 
                                                 f"{self.output_dir}/btn_result.png")
+        
+        # 4. 扑克背面识别（弃牌检测）
+        print(f"\n{'='*40}")
+        print("4. 扑克背面识别（弃牌检测）")
+        print(f"{'='*40}")
+        
+        # 检查玩家是否弃牌（使用颜色方差方法）
+        fold_status_variance = self.check_player_fold_by_variance(image_cv, variance_threshold=10.0)
+        if 'error' in fold_status_variance:
+            print(f"  错误: {fold_status_variance['error']}")
+        else:
+            for player, status in fold_status_variance.items():
+                if 'error' in status:
+                    print(f"    {player}: 错误 - {status['error']}")
+                else:
+                    if status['folded']:
+                        print(f"    {player}: 未弃牌 (方差: {status['variance']:.2f}, 置信度: {status['confidence']:.3f})")
+                    else:
+                        print(f"    {player}: 已弃牌 (方差: {status['variance']:.2f}, 置信度: {status['confidence']:.3f})")
+        
+        # 可视化弃牌检测结果
+        vis_fold_image = self.visualize_fold_result(image_cv, fold_status_variance, 
+                                                 f"{self.output_dir}/fold_result_variance.png")
         
         # 修改输出格式，只输出指定区域的识别结果
         print(f"\n{'='*40}")
