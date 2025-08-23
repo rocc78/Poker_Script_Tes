@@ -852,9 +852,9 @@ class PokerRecognizer:
                     print(f"    未找到匹配的花色")
                     
                 # 显示所有花色的匹配分数
-                for suit_name, result in region_result.items():
-                    if suit_name != 'best_match':
-                        print(f"    {result['chinese_name']}: {result['score']:.3f}")
+                # for suit_name, result in region_result.items():
+                #     if suit_name != 'best_match':
+                #         print(f"    {result['chinese_name']}: {result['score']:.3f}")
                 
                 results[region_name] = region_result
             else:
