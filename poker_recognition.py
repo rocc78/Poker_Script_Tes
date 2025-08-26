@@ -48,7 +48,7 @@ class PokerRecognizer:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.output_dir = f"result/poker_recognition_{timestamp}"
         os.makedirs(self.output_dir, exist_ok=True)
-        print(f"📁 输出目录: {self.output_dir}")
+        print(f"[OUTPUT] 输出目录: {self.output_dir}")
         
     def setup_tesseract(self):
         """初始化Tesseract OCR"""
@@ -198,11 +198,11 @@ class PokerRecognizer:
                         self.suit_templates[suit_name] = template
                         print(f"✅ 加载新模板: {filename} -> {self.suit_names[suit_name]}")
                     else:
-                        print(f"❌ 无法读取新模板: {filename}")
+                        print(f"[ERROR] 无法读取新模板: {filename}")
                 else:
-                    print(f"❌ 新模板文件不存在: {filename}")
+                    print(f"[ERROR] 新模板文件不存在: {filename}")
         else:
-            print("新模板文件夹不存在，使用原始模板")
+            print("[INFO] 新模板文件夹不存在，使用原始模板")
             
         # 如果没有加载到新模板，则使用原始模板
         if not self.suit_templates:
@@ -220,17 +220,17 @@ class PokerRecognizer:
                     template = cv2.imread(str(template_path), cv2.IMREAD_GRAYSCALE)
                     if template is not None:
                         self.suit_templates[suit_name] = template
-                        print(f"✅ 加载模板: {filename} -> {self.suit_names[suit_name]}")
+                        print(f"[SUCCESS] 加载模板: {filename} -> {self.suit_names[suit_name]}")
                     else:
-                        print(f"❌ 无法读取模板: {filename}")
+                        print(f"[ERROR] 无法读取模板: {filename}")
                 else:
-                    print(f"❌ 模板文件不存在: {filename}")
+                    print(f"[ERROR] 模板文件不存在: {filename}")
                 
-        print(f"共加载 {len(self.suit_templates)} 个模板")
+        print(f"[INFO] 共加载 {len(self.suit_templates)} 个模板")
     
     def load_btn_template(self, template_path: str = "1/new_templates/btn.png"):
         """加载按钮模板图片"""
-        print(f"正在加载按钮模板: {template_path}")
+        print(f"[INFO] 正在加载按钮模板: {template_path}")
         self.btn_template = None
         
         template_path = Path(template_path)
@@ -239,16 +239,16 @@ class PokerRecognizer:
             template = cv2.imread(str(template_path), cv2.IMREAD_GRAYSCALE)
             if template is not None:
                 self.btn_template = template
-                print(f"✅ 加载模板成功: {template_path.name}")
-                print(f"  模板尺寸: {template.shape[1]}x{template.shape[0]}")
+                print(f"[SUCCESS] 加载模板成功: {template_path.name}")
+                print(f"  [INFO] 模板尺寸: {template.shape[1]}x{template.shape[0]}")
             else:
-                print(f"❌ 无法读取模板: {template_path}")
+                print(f"[ERROR] 无法读取模板: {template_path}")
         else:
-            print(f"❌ 模板文件不存在: {template_path}")
+            print(f"[ERROR] 模板文件不存在: {template_path}")
     
     def load_back_template(self, template_path: str = "1/new_templates/back.png"):
         """加载扑克背面模板图片"""
-        print(f"正在加载扑克背面模板: {template_path}")
+        print(f"[INFO] 正在加载扑克背面模板: {template_path}")
         self.back_template = None
         
         template_path = Path(template_path)
@@ -257,30 +257,30 @@ class PokerRecognizer:
             template = cv2.imread(str(template_path), cv2.IMREAD_GRAYSCALE)
             if template is not None:
                 self.back_template = template
-                print(f"✅ 加载模板成功: {template_path.name}")
-                print(f"  模板尺寸: {template.shape[1]}x{template.shape[0]}")
+                print(f"[SUCCESS] 加载模板成功: {template_path.name}")
+                print(f"  [INFO] 模板尺寸: {template.shape[1]}x{template.shape[0]}")
             else:
-                print(f"❌ 无法读取模板: {template_path}")
+                print(f"[ERROR] 无法读取模板: {template_path}")
         else:
-            print(f"❌ 模板文件不存在: {template_path}")
+            print(f"[ERROR] 模板文件不存在: {template_path}")
     
     def load_image(self, image_path):
         """加载图片"""
         try:
             if not os.path.exists(image_path):
-                print(f"❌ 图片文件不存在：{image_path}")
+                print(f"[ERROR] 图片文件不存在：{image_path}")
                 return None
             
             # 使用PIL加载图片
             image = Image.open(image_path)
-            print(f"✅ 成功加载图片：{image_path}")
-            print(f"   图片大小：{image.size}")
-            print(f"   图片模式：{image.mode}")
+            print(f"[SUCCESS] 成功加载图片：{image_path}")
+            print(f"   [INFO] 图片大小：{image.size}")
+            print(f"   [INFO] 图片模式：{image.mode}")
             
             return image
             
         except Exception as e:
-            print(f"❌ 加载图片失败：{str(e)}")
+            print(f"[ERROR] 加载图片失败：{str(e)}")
             return None
     
     # OCR相关方法
@@ -312,14 +312,14 @@ class PokerRecognizer:
             return enhanced_image
             
         except Exception as e:
-            print(f"⚠️  图片预处理失败：{str(e)}，使用原图")
+            print(f"[WARNING] 图片预处理失败：{str(e)}，使用原图")
             return image
     
     def get_recognition_strategy(self, region_name):
         """获取区域的识别策略"""
         if not self.recognition_strategies:
             # 如果没有配置策略，使用默认配置
-            print(f"   ⚠️  未配置识别策略，使用默认配置")
+            print(f"   [WARNING] 未配置识别策略，使用默认配置")
             return "--oem 3 --psm 6 --dpi 300 -l chi_sim+eng"
         
         #print(f"   🔍 查找区域 {region_name} 的识别策略")
@@ -346,10 +346,10 @@ class PokerRecognizer:
     def recognize_full_image(self, image, save_result=True):
         """识别整个图片"""
         if not self.default_config:
-            print("❌ Tesseract OCR未初始化")
+            print("[ERROR] Tesseract OCR未初始化")
             return None
         
-        print(f"\n🔍 开始识别整个图片...")
+        print(f"\n[START] 开始识别整个图片...")
         
         # 检查是否为数字识别配置
         is_digit_only = 'digit' in self.char_whitelist and not any(c in self.char_whitelist for c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz一二三四五六七八九十百千万亿跟注加注弃牌发牌底池公共牌自己的筹码BB大小王红桃黑桃方块梅花AKQJ')
@@ -388,7 +388,7 @@ class PokerRecognizer:
             #     print(f"   未识别到文字")
                 
         except Exception as e:
-            print(f"❌ PSM 6 识别失败: {str(e)}")
+            print(f"[ERROR] PSM 6 识别失败: {str(e)}")
             results = {
                 'text': '',
                 'time': 0,
@@ -405,10 +405,10 @@ class PokerRecognizer:
     def recognize_chinese_text(self, image, save_result=True):
         """专门识别中文文本，使用优化的配置"""
         if not self.default_config:
-            print("❌ Tesseract OCR未初始化")
+            print("[ERROR] Tesseract OCR未初始化")
             return None
         
-        print(f"\n🔍 开始中文文本识别...")
+        print(f"\n[START] 开始中文文本识别...")
         
         # 检查是否为数字识别配置
         is_digit_only = 'digit' in self.char_whitelist and not any(c in self.char_whitelist for c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz一二三四五六七八九十百千万亿跟注加注弃牌发牌底池公共牌自己的筹码BB大小王红桃黑桃方块梅花AKQJ')
@@ -417,12 +417,52 @@ class PokerRecognizer:
             # 预处理图片以提高中文识别效果（根据配置决定是否启用灰度处理）
             processed_image = self.preprocess_image_for_chinese(image, enable_grayscale=not is_digit_only)
             
+            # 为发牌区域增加额外的预处理步骤
+            # 转换为OpenCV格式进行进一步处理
+            import cv2
+            import numpy as np
+            from PIL import Image
+            
+            # 转换为灰度图
+            if processed_image.mode != 'L':
+                gray_image = processed_image.convert('L')
+            else:
+                gray_image = processed_image
+            
+            # 大幅度放大图片
+            scale_factor = 5
+            enlarged_image = gray_image.resize(
+                (gray_image.width * scale_factor, gray_image.height * scale_factor),
+                Image.Resampling.LANCZOS
+            )
+            
+            # 转换为OpenCV格式
+            opencv_image = cv2.cvtColor(np.array(enlarged_image), cv2.COLOR_GRAY2BGR)
+            gray = cv2.cvtColor(opencv_image, cv2.COLOR_BGR2GRAY)
+            
+            # 应用双边滤波保留边缘
+            filtered = cv2.bilateralFilter(gray, 9, 75, 75)
+            
+            # 自适应阈值
+            binary = cv2.adaptiveThreshold(filtered, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+            
+            # 转换回PIL格式
+            processed_image = Image.fromarray(binary)
+            
             # 中文识别专用配置 - 根据测试结果优化
             chinese_configs = [
-                f"--oem 3 --psm 6 --dpi 300 -l chi_sim",  # 仅中文，PSM 6 - 最佳效果
-                f"--oem 3 --psm 6 --dpi 300 -l chi_sim+eng",  # 中文+英文，PSM 6
                 f"--oem 3 --psm 7 --dpi 300 -l chi_sim",  # 仅中文，PSM 7
+                f"--oem 3 --psm 6 --dpi 300 -l chi_sim",  # 仅中文，PSM 6
+                f"--oem 1 --psm 7 --dpi 300 -l chi_sim",  # 仅中文，PSM 7
+                f"--oem 1 --psm 6 --dpi 300 -l chi_sim",  # 仅中文，PSM 6
                 f"--oem 3 --psm 8 --dpi 300 -l chi_sim",  # 仅中文，PSM 8
+                f"--oem 3 --psm 13 --dpi 300 -l chi_sim",  # 仅中文，PSM 13
+                f"--oem 3 --psm 4 --dpi 300 -l chi_sim",  # 仅中文，PSM 4
+                f"--oem 3 --psm 3 --dpi 300 -l chi_sim",  # 仅中文，PSM 3
+                f"--oem 3 --psm 7 --dpi 300 -l chi_sim+eng",  # 中文+英文，PSM 7
+                f"--oem 3 --psm 6 --dpi 300 -l chi_sim+eng",  # 中文+英文，PSM 6
+                f"--oem 1 --psm 7 --dpi 300 -l chi_sim+eng",  # 中文+英文，PSM 7
+                f"--oem 1 --psm 6 --dpi 300 -l chi_sim+eng",  # 中文+英文，PSM 6
             ]
             
             best_result = {'text': '', 'confidence': 0, 'config': '', 'time': 0}
@@ -435,7 +475,7 @@ class PokerRecognizer:
                     start_time = time.time()
                     
                     # 识别文字
-                    text = pytesseract.image_to_string(processed_image, config=config, lang=self.language)
+                    text = pytesseract.image_to_string(processed_image, config=config, lang='chi_sim')
                     
                     # 记录结束时间
                     end_time = time.time()
@@ -449,10 +489,20 @@ class PokerRecognizer:
                     total_chars = len(cleaned_text)
                     chinese_ratio = chinese_chars_count / total_chars if total_chars > 0 else 0
                     
-                    #print(f"   ✅ 识别结果: '{cleaned_text}' (中文比例: {chinese_ratio:.2f}, 时间: {recognition_time:.3f}秒)")
+                    #print(f"   [SUCCESS] 识别结果: '{cleaned_text}' (中文比例: {chinese_ratio:.2f}, 时间: {recognition_time:.3f}秒)")
                     
-                    # 选择最佳结果（优先选择中文比例高的）
-                    if chinese_ratio > best_result['confidence'] or (chinese_ratio == best_result['confidence'] and len(cleaned_text) > len(best_result['text'])):
+                    # 选择最佳结果（优先选择包含"发牌"的，其次是中文比例高的）
+                    if "发牌" in cleaned_text:
+                        best_result = {
+                            'text': cleaned_text,
+                            'confidence': 1.0,
+                            'config': config,
+                            'time': recognition_time,
+                            'success': True
+                        }
+                        print(f"   [FOUND] 找到目标文字 '发牌'")
+                        break
+                    elif chinese_ratio > best_result['confidence'] or (chinese_ratio == best_result['confidence'] and len(cleaned_text) > len(best_result['text'])):
                         best_result = {
                             'text': cleaned_text,
                             'confidence': chinese_ratio,
@@ -462,20 +512,20 @@ class PokerRecognizer:
                         }
                         
                 except Exception as e:
-                    print(f"   ❌ 配置 {i+1} 识别失败: {str(e)}")
+                    print(f"   [ERROR] 配置 {i+1} 识别失败: {str(e)}")
                     continue
             
             # 显示最佳结果
             if best_result['success']:
-                print(f"\n🏆 最佳识别结果 (配置: PSM {best_result['config'].split('--psm ')[1].split()[0]}):")
+                print(f"\n[BEST] 最佳识别结果 (配置: PSM {best_result['config'].split('--psm ')[1].split()[0]}):")
                 print(f"   识别结果: '{best_result['text']}'")
                 print(f"   中文比例: {best_result['confidence']:.2f}")
                 print(f"   识别时间: {best_result['time']:.3f}秒")
             else:
-                print(f"\n❌ 未能识别到有效文字")
+                print(f"\n[ERROR] 未能识别到有效文字")
                 
         except Exception as e:
-            print(f"❌ 中文文本识别失败: {str(e)}")
+            print(f"[ERROR] 中文文本识别失败: {str(e)}")
             best_result = {
                 'text': '',
                 'confidence': 0,
@@ -494,14 +544,14 @@ class PokerRecognizer:
     def recognize_regions(self, image, regions=None):
         """识别指定区域"""
         if not self.default_config:
-            print("❌ Tesseract OCR未初始化")
-            return None
+                print("[ERROR] Tesseract OCR未初始化")
+                return None
         
         if regions is None:
             regions = self.test_regions
         
         if not regions:
-            print("❌ 未配置识别区域")
+            print("[ERROR] 未配置识别区域")
             return None
         
         # 如果regions中的坐标是相对坐标（0-1之间），需要转换为绝对坐标
@@ -536,7 +586,7 @@ class PokerRecognizer:
                 converted_regions[region_name] = coords
                 #print(f"📍 区域 {region_name} 使用绝对坐标: {coords}")
         
-        #print(f"\n🔍 开始识别指定区域...")
+        #print(f"\n[START] 开始识别指定区域...")
         #print(f"   共 {len(converted_regions)} 个区域")
         
         results = {}
@@ -553,7 +603,7 @@ class PokerRecognizer:
                 # 保存裁剪图片（可选）
                 # cropped_filename = os.path.join(self.output_dir, f"cropped_{region_name}.png")
                 # cropped_image.save(cropped_filename)
-                # print(f"   📁 裁剪图片已保存: {cropped_filename}")
+                # print(f"   [SAVE] 裁剪图片已保存: {cropped_filename}")
                 
                 # 获取该区域的识别策略
                 #print(f"   📌 区域名称: '{region_name}'")
@@ -589,7 +639,7 @@ class PokerRecognizer:
                 #     print(f"   ⚠️  未识别到文字")
                     
             except Exception as e:
-                print(f"   ❌ 区域识别失败: {str(e)}")
+                print(f"   [ERROR] 区域识别失败: {str(e)}")
                 results[region_name] = {
                     'text': '',
                     'coords': coords,
@@ -609,10 +659,10 @@ class PokerRecognizer:
             with open(result_file, 'w', encoding='utf-8') as f:
                 json.dump(results, f, ensure_ascii=False, indent=2)
             
-            print(f"   📁 结果已保存: {result_file}")
+            print(f"   [RESULT] 结果已保存: {result_file}")
             
         except Exception as e:
-            print(f"   ❌ 保存结果失败: {str(e)}")
+            print(f"   [ERROR] 保存结果失败: {str(e)}")
     
     def create_marked_image(self, image, regions=None, results=None):
         """创建标记了识别区域和结果的图片"""
@@ -694,11 +744,11 @@ class PokerRecognizer:
             marked_filename = os.path.join(self.output_dir, f"marked_image_{timestamp}.png")
             marked_image.save(marked_filename)
             
-            #print(f"📁 标记图片已保存: {marked_filename}")
+            #print(f"[SAVE] 标记图片已保存: {marked_filename}")
             return marked_filename
             
         except Exception as e:
-            print(f"❌ 创建标记图片失败: {str(e)}")
+            print(f"[ERROR] 创建标记图片失败: {str(e)}")
             return None
     
     # 花色识别相关方法
@@ -1366,7 +1416,7 @@ class PokerRecognizer:
         # 保存结果
         if save_path:
             cv2.imwrite(save_path, vis_image)
-            print(f"弃牌检测结果图像已保存: {save_path}")
+            print(f"[RESULT] 弃牌检测结果图像已保存: {save_path}")
             
         return vis_image
     
@@ -1379,7 +1429,7 @@ class PokerRecognizer:
             image_path: 图像路径
         """
         print(f"\n{'='*60}")
-        print(f"开始对图像进行所有类型识别: {image_path}")
+        print(f"[START] 开始对图像进行所有类型识别: {image_path}")
         print(f"{'='*60}")
         
         # 加载图像
@@ -1399,7 +1449,7 @@ class PokerRecognizer:
         region_results = self.recognize_regions(image_pil)
         
         # 创建标记图片
-        #print(f"\n🎨 创建OCR标记图片...")
+        #print(f"\n[CREATE] 创建OCR标记图片...")
         self.create_marked_image(image_pil, self.test_regions, region_results)
         
         # # 2. 花色识别
@@ -1440,7 +1490,7 @@ class PokerRecognizer:
                 table_position, confidence = self.determine_table_position(x, y, image_width, image_height)
                 #print(f"按钮位置: {table_position}")
             else:
-                print(f"  ❌ 未匹配到按钮")
+                print(f"  [ERROR] 未匹配到按钮")
         
         # 可视化按钮识别结果
         vis_btn_image = self.visualize_btn_result(image_cv, btn_result, 
@@ -1448,7 +1498,7 @@ class PokerRecognizer:
         
         # 4. 扑克背面识别（弃牌检测）
         print(f"\n{'='*40}")
-        print("4. 扑克背面识别（弃牌检测）")
+        print("[INFO] 4. 扑克背面识别（弃牌检测）")
         print(f"{'='*40}")
         
         # 检查玩家是否弃牌（使用颜色方差方法）
@@ -1520,13 +1570,21 @@ class PokerRecognizer:
             table_position, confidence = self.determine_table_position(btn_result['position'][0], btn_result['position'][1], image_width, image_height)
             print(f"按钮位置: {table_position}")
         
-        print(f"\n✅ 所有识别完成！")
-        print(f"📁 所有结果已保存到目录: {self.output_dir}")
-        print(f"📁 请查看该目录中的文件")
+        print(f"\n[DONE] 所有识别完成！")
+        print(f"[RESULT] 所有结果已保存到目录: {self.output_dir}")
+        print(f"[RESULT] 请查看该目录中的文件")
 
 
 def main():
     """主函数"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='整合扑克牌识别程序')
+    parser.add_argument('image_path', nargs='?', help='图片文件路径')
+    parser.add_argument('--english', '-e', action='store_true', help='使用英文识别模式')
+    
+    args = parser.parse_args()
+    
     print("=" * 60)
     print("整合扑克牌识别程序")
     print("支持OCR数字识别、花色识别和按钮位置识别")
@@ -1535,33 +1593,41 @@ def main():
     # 创建识别器
     recognizer = PokerRecognizer()
     
+    # 如果指定了英文模式，修改语言设置
+    if args.english:
+        recognizer.language = 'eng'
+        print("[INFO] 使用英文识别模式")
+    
     try:
         # 获取图片路径
-        print("\n📁 请输入图片文件路径:")
-        print("   支持格式: PNG, JPG, JPEG, BMP, TIFF等")
-        print("   示例: test.png 或 C:/path/to/image.jpg")
-        
-        while True:
-            image_path = input("\n图片路径: ").strip().strip('"')
+        if args.image_path:
+            image_path = args.image_path
+        else:
+            print("\n[INPUT] 请输入图片文件路径:")
+            print("   支持格式: PNG, JPG, JPEG, BMP, TIFF等")
+            print("   示例: test.png 或 C:/path/to/image.jpg")
             
-            if not image_path:
-                print("❌ 请输入有效的图片路径")
-                continue
-            
-            # 检查文件是否存在
-            if not os.path.exists(image_path):
-                print(f"❌ 图片文件不存在: {image_path}")
-                continue
-            
-            break
+            while True:
+                image_path = input("\n图片路径: ").strip().strip('"')
+                
+                if not image_path:
+                    print("[ERROR] 请输入有效的图片路径")
+                    continue
+                
+                # 检查文件是否存在
+                if not os.path.exists(image_path):
+                    print(f"[ERROR] 图片文件不存在: {image_path}")
+                    continue
+                
+                break
         
         # 进行所有识别
         recognizer.recognize_all(image_path)
         
     except Exception as e:
-        print(f"❌ 程序运行出错：{str(e)}")
+        print(f"[ERROR] 程序运行出错：{str(e)}")
     finally:
-        print(f"\n👋 程序已退出")
+        print(f"\n[EXIT] 程序已退出")
 
 
 if __name__ == "__main__":
